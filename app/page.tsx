@@ -4,10 +4,13 @@ import SignOutButton from "@/components/SignOutButton";
 import Ledger from "@/components/Ledger";
 import LandingPage from "@/components/LandingPage";
 
-export default async function Home() {
+export default async function Home({ searchParams }: PageProps<"/">) {
+  const sp = await searchParams;
   const session = await auth();
 
-  if (!session?.user) {
+  // ?landing=1 lets a signed-in user (or a dev session) preview the
+  // marketing page without signing out.
+  if (!session?.user || sp.landing === "1") {
     return <LandingPage />;
   }
 
