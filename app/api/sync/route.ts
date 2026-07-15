@@ -1,0 +1,71 @@
+import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
+import { listRecentMessages } from "@/lib/gmail";
+import { extractCommitments } from "@/lib/extract";
+
+const CONFIDENCE_THRESHOLD = 0.3;
+
+export async function POST() {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return Response.json({ error: "Not signed in." }, { status: 401 });
+  }
+
+  const userId = session.user.id;
+
+  const messages = await listRecentMessages(userId, {
+    days: 30,
+    maxResults: 50,
+  });
+
+  const alreadyScanned = new Set(
+    (
+      await prisma.scannedEmail.findMany({
+        where: {
+          userId,
+          gmailMessageId: { in: messages.map((m) => m.id) },
+        },
+        select: { gmailMessageId: true },
+      })
+    ).map((s) => s.gmailMessageId)
+  );
+
+  const newMessages = messages.filter((m) => !alreadyScanned.has(m.id));
+
+  let commitmentsCreated = 0;
+
+  for (const message of newMessages) {
+    try {
+      const extracted = await extractCommitments(message);
+
+      for (const c of extracted) {
+        if (c.confidence < CONFIDENCE_THRESHOLD) continue;
+
+        await prisma.commitment.create({
+          data: {
+            userId,
+            direction: c.direction,
+            counterparty: c.counterparty,
+            description: c.description,
+            dueDate: c.dueDate ? new Date(c.dueDate) : null,
+            confidence: c.confidence,
+            sourceGmailMessageId: message.id,
+            sourceSnippet: message.snippet,
+          },
+        });
+        commitmentsCreated++;
+      }
+    } catch (err) {
+      console.error(`Failed to process email ${message.id}:`, err);
+    }
+
+    await prisma.scannedEmail.create({
+      data: { userId, gmailMessageId: message.id },
+    });
+  }
+
+  return Response.json({
+    emailsScanned: newMessages.length,
+    commitmentsCreated,
+  });
+}
