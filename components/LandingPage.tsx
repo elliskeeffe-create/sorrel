@@ -13,9 +13,8 @@ export default function LandingPage() {
       <main className="mx-auto w-full max-w-5xl px-6">
         <section className="flex flex-col items-center pb-14 pt-16 text-center">
           <h1 className="max-w-lg font-serif text-4xl font-medium leading-tight tracking-tight text-ink sm:text-5xl">
-            Every promise made{" "}
-            <em className="text-owed-you not-italic italic">to you</em>, and
-            by you.
+            Your to do list,{" "}
+            <em className="text-owed-you not-italic italic">automated by AI</em>.
           </h1>
           <p className="mt-5 max-w-md text-base text-ink-soft">
             Sorrel reads your inbox and quietly tracks the commitments hiding
