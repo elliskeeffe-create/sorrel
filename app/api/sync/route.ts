@@ -1,7 +1,8 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { listRecentMessages } from "@/lib/gmail";
-import { extractCommitments } from "@/lib/extract";
+import { extractCommitments, parseDueDate } from "@/lib/extract";
+import { detectResolution } from "@/lib/detectResolution";
 
 const CONFIDENCE_THRESHOLD = 0.3;
 
@@ -64,9 +65,11 @@ export async function POST() {
               priority: c.priority,
               counterparty: c.counterparty,
               description: c.description,
-              dueDate: c.dueDate ? new Date(c.dueDate) : null,
+              contextSummary: c.contextSummary,
+              dueDate: parseDueDate(c.dueDate),
               confidence: c.confidence,
               sourceGmailMessageId: message.id,
+              sourceThreadId: message.threadId,
               sourceSnippet: message.snippet,
             },
           });
@@ -83,6 +86,44 @@ export async function POST() {
         create: { userId, gmailMessageId: message.id },
         update: {},
       });
+    }
+
+    // Loop-closed detection: polling-based (no real Gmail push webhook set
+    // up). Only checked against messages that are genuinely new this run —
+    // once a message has been scanned, it's never reconsidered — so this
+    // stays cheap in the common case where nothing in an open thread moved.
+    if (newMessages.length > 0) {
+      const openCommitments = await prisma.commitment.findMany({
+        where: { userId, status: "OPEN", sourceThreadId: { not: null } },
+      });
+
+      for (const message of newMessages) {
+        const candidates = openCommitments.filter(
+          (c) =>
+            c.sourceThreadId === message.threadId &&
+            c.sourceGmailMessageId !== message.id
+        );
+
+        for (const commitment of candidates) {
+          try {
+            const result = await detectResolution(
+              commitment.description,
+              message.bodyText
+            );
+            if (result?.resolved) {
+              await prisma.commitment.update({
+                where: { id: commitment.id },
+                data: { readyToClose: true, closeSuggestionReason: result.reason },
+              });
+            }
+          } catch (err) {
+            console.error(
+              `Failed resolution check for commitment ${commitment.id}:`,
+              err
+            );
+          }
+        }
+      }
     }
 
     return Response.json({

@@ -3,7 +3,13 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import type { CommitmentDTO } from "@/lib/types";
 import LedgerRow from "@/components/LedgerRow";
+import PeopleView from "@/components/PeopleView";
+import Notepad from "@/components/Notepad";
+import CommandBar from "@/components/CommandBar";
+import ResolutionBanner from "@/components/ResolutionBanner";
+import { groupByCounterparty } from "@/lib/groupByCounterparty";
 
+type MainView = "ledger" | "people" | "notepad";
 type View = "open" | "snoozed" | "done";
 
 const SYNC_INTERVAL_MS = 10_000;
@@ -16,12 +22,51 @@ function isOverdueOrToday(dueDate: string | null): boolean {
   return date.getTime() <= today.getTime();
 }
 
+function GroupedColumn({
+  rows,
+  onMarkDone,
+  onSnooze,
+  onReopen,
+}: {
+  rows: CommitmentDTO[];
+  onMarkDone: (id: string) => void;
+  onSnooze?: (id: string) => void;
+  onReopen?: (id: string) => void;
+}) {
+  if (rows.length === 0) {
+    return <p className="px-5 py-4 text-sm text-ink-soft">All clear.</p>;
+  }
+
+  return (
+    <>
+      {groupByCounterparty(rows).map((group) => (
+        <div key={group.key}>
+          <p className="border-b border-line bg-paper px-5 py-1.5 font-serif text-xs font-medium text-ink-soft">
+            {group.label}
+          </p>
+          {group.items.map((c) => (
+            <LedgerRow
+              key={c.id}
+              commitment={c}
+              onMarkDone={onMarkDone}
+              onSnooze={onSnooze}
+              onReopen={onReopen}
+              showSender={false}
+            />
+          ))}
+        </div>
+      ))}
+    </>
+  );
+}
+
 export default function Ledger() {
   const [commitments, setCommitments] = useState<CommitmentDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<View>("open");
+  const [mainView, setMainView] = useState<MainView>("ledger");
   const syncingRef = useRef(false);
 
   const loadCommitments = useCallback(async () => {
@@ -102,7 +147,7 @@ export default function Ledger() {
 
   return (
     <div className="mx-auto w-full max-w-4xl px-6 py-10">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-serif text-2xl font-medium tracking-tight text-ink">
             Your ledger
@@ -117,19 +162,59 @@ export default function Ledger() {
                 }`}
           </p>
         </div>
-        <div className="flex items-center gap-2 font-serif text-xs text-ink-soft">
-          <span
-            className={`h-2 w-2 rounded-full ${
-              syncing ? "animate-pulse bg-owed-you" : "bg-line"
-            }`}
-          />
-          {syncing ? "syncing…" : "watching your inbox"}
+        <div className="flex items-center gap-4">
+          <div className="flex gap-1 rounded-md border border-line bg-card p-0.5">
+            {(["ledger", "people", "notepad"] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setMainView(v)}
+                className={`rounded px-2.5 py-1 font-serif text-xs capitalize ${
+                  mainView === v
+                    ? "bg-ink text-paper"
+                    : "text-ink-soft hover:text-ink"
+                }`}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+          <div className="flex w-[8.5rem] flex-none items-center gap-2 font-serif text-xs text-ink-soft">
+            <span
+              className={`h-2 w-2 flex-none rounded-full ${
+                syncing ? "animate-pulse bg-owed-you" : "bg-line"
+              }`}
+            />
+            <span className="truncate">
+              {syncing ? "syncing…" : "watching your inbox"}
+            </span>
+          </div>
         </div>
       </div>
 
       {error && <p className="mb-4 font-serif text-xs text-owed-by">{error}</p>}
 
-      {!loading && commitments.length === 0 && (
+      {mainView === "ledger" && (
+        <ResolutionBanner commitments={commitments} onResolved={loadCommitments} />
+      )}
+
+      {mainView === "ledger" && (
+        <CommandBar
+          onCreated={(c) => setCommitments((prev) => [c, ...prev])}
+        />
+      )}
+
+      {mainView === "notepad" && <Notepad onConverted={loadCommitments} />}
+
+      {mainView === "people" && (
+        <PeopleView
+          commitments={commitments}
+          onMarkDone={markDone}
+          onSnooze={snooze}
+          onReopen={reopen}
+        />
+      )}
+
+      {mainView === "ledger" && !loading && commitments.length === 0 && (
         <div className="rounded-xl border border-line bg-card px-6 py-12 text-center">
           <p className="font-serif text-lg text-ink">Nothing here yet.</p>
           <p className="mt-2 text-sm text-ink-soft">
@@ -139,7 +224,7 @@ export default function Ledger() {
         </div>
       )}
 
-      {commitments.length > 0 && (
+      {mainView === "ledger" && commitments.length > 0 && (
         <div className="overflow-hidden rounded-xl border border-line bg-card shadow-[0_1px_0_rgba(0,0,0,0.02),0_18px_40px_-28px_rgba(0,0,0,0.25)]">
           <div className="flex flex-wrap gap-1 border-b border-line bg-paper px-4 py-2.5">
             <button
@@ -187,36 +272,18 @@ export default function Ledger() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2">
                 <div className="border-line sm:border-r">
-                  {owedToYou.length === 0 ? (
-                    <p className="px-5 py-4 text-sm text-ink-soft">
-                      All clear.
-                    </p>
-                  ) : (
-                    owedToYou.map((c) => (
-                      <LedgerRow
-                        key={c.id}
-                        commitment={c}
-                        onMarkDone={markDone}
-                        onSnooze={snooze}
-                      />
-                    ))
-                  )}
+                  <GroupedColumn
+                    rows={owedToYou}
+                    onMarkDone={markDone}
+                    onSnooze={snooze}
+                  />
                 </div>
                 <div>
-                  {owedByYou.length === 0 ? (
-                    <p className="px-5 py-4 text-sm text-ink-soft">
-                      All clear.
-                    </p>
-                  ) : (
-                    owedByYou.map((c) => (
-                      <LedgerRow
-                        key={c.id}
-                        commitment={c}
-                        onMarkDone={markDone}
-                        onSnooze={snooze}
-                      />
-                    ))
-                  )}
+                  <GroupedColumn
+                    rows={owedByYou}
+                    onMarkDone={markDone}
+                    onSnooze={snooze}
+                  />
                 </div>
               </div>
               <div className="flex items-center justify-between border-t border-line bg-paper px-5 py-2.5 font-serif text-[11px] text-ink-soft">
@@ -230,22 +297,11 @@ export default function Ledger() {
           )}
 
           {view === "snoozed" && (
-            <div>
-              {snoozedRows.length === 0 ? (
-                <p className="px-5 py-4 text-sm text-ink-soft">
-                  Nothing snoozed.
-                </p>
-              ) : (
-                snoozedRows.map((c) => (
-                  <LedgerRow
-                    key={c.id}
-                    commitment={c}
-                    onMarkDone={markDone}
-                    onReopen={reopen}
-                  />
-                ))
-              )}
-            </div>
+            <GroupedColumn
+              rows={snoozedRows}
+              onMarkDone={markDone}
+              onReopen={reopen}
+            />
           )}
 
           {view === "done" && (

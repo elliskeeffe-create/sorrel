@@ -1,15 +1,13 @@
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
 import type { GmailMessage } from "@/lib/gmail";
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
-const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5";
+import { anthropic, MODEL, unwrapArrayField } from "@/lib/claudeClient";
 
 export interface ExtractedCommitment {
   direction: "OWED_TO_YOU" | "OWED_BY_YOU";
   priority: "HIGH_PRIORITY" | "REPLY_DEBT" | "QUICK_WIN";
   counterparty: string;
   description: string;
+  contextSummary: string;
   dueDate: string | null;
   confidence: number;
 }
@@ -48,6 +46,11 @@ const EXTRACT_TOOL: Anthropic.Tool = {
               description:
                 "The exact next physical step, as a short action-verb phrase, e.g. \"send the revised mockups\" or \"confirm the Tuesday cleaning\".",
             },
+            contextSummary: {
+              type: "string",
+              description:
+                "1-2 plain sentences briefing someone who hasn't read the thread: why this loop exists and its latest status, e.g. \"Jake confirmed the install date but is waiting on the router model number before shipping equipment.\" Written from the inbox owner's perspective, no restating of direction/priority.",
+            },
             dueDate: {
               type: ["string", "null"],
               description:
@@ -64,6 +67,7 @@ const EXTRACT_TOOL: Anthropic.Tool = {
             "priority",
             "counterparty",
             "description",
+            "contextSummary",
             "dueDate",
             "confidence",
           ],
@@ -91,6 +95,8 @@ Noise filter — do NOT extract from:
 - Cold outreach or unsolicited vendor sales pitches.
 
 It is better to surface a borderline loop than to miss a real one — the user can dismiss anything that doesn't belong. Use lower confidence for softer or implied loops rather than dropping them.
+
+For each loop, also write a contextSummary: 1-2 plain sentences briefing someone who hasn't read the thread on why this loop exists and its latest status. Do not restate the direction or priority — add information, don't repeat it.
 
 priority:
 - HIGH_PRIORITY: time-sensitive or critical.
@@ -130,7 +136,7 @@ export async function extractCommitments(
   if (!toolUse) return [];
 
   const input = toolUse.input as { commitments?: unknown };
-  const rawCommitments = unwrapCommitments(input.commitments);
+  const rawCommitments = unwrapArrayField(input.commitments, "commitments");
   if (!Array.isArray(rawCommitments)) return [];
 
   const raw = rawCommitments as ExtractedCommitment[];
@@ -146,26 +152,7 @@ export async function extractCommitments(
   return valid;
 }
 
-// Claude sometimes double-encodes the tool result: the "commitments" field
-// itself is a JSON string of {"commitments": [...]} instead of a native
-// array. Unwrap up to once so real extracted items aren't silently dropped.
-function unwrapCommitments(value: unknown): unknown {
-  if (Array.isArray(value)) return value;
-  if (typeof value === "string") {
-    try {
-      const parsed = JSON.parse(value);
-      if (Array.isArray(parsed)) return parsed;
-      if (parsed && typeof parsed === "object" && "commitments" in parsed) {
-        return (parsed as { commitments: unknown }).commitments;
-      }
-    } catch {
-      return undefined;
-    }
-  }
-  return undefined;
-}
-
-function isValidCommitment(c: ExtractedCommitment): boolean {
+export function isValidCommitment(c: ExtractedCommitment): boolean {
   return (
     (c.direction === "OWED_TO_YOU" || c.direction === "OWED_BY_YOU") &&
     (c.priority === "HIGH_PRIORITY" ||
@@ -175,6 +162,16 @@ function isValidCommitment(c: ExtractedCommitment): boolean {
     c.counterparty.trim().length > 0 &&
     typeof c.description === "string" &&
     c.description.trim().length > 0 &&
+    typeof c.contextSummary === "string" &&
     typeof c.confidence === "number"
   );
+}
+
+// Defense-in-depth: the model is instructed to resolve dates to ISO 8601,
+// but if it ever returns something else (a bare weekday name, "TBD", etc.)
+// this keeps a bad string from reaching `new Date()` as a truthy non-date.
+export function parseDueDate(dueDate: string | null): Date | null {
+  if (!dueDate || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return null;
+  const date = new Date(dueDate);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
