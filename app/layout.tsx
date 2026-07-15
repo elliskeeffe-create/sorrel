@@ -22,7 +22,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Sidekick",
+  title: "Sorrel",
   description: "The commitment layer for work & life.",
 };
 

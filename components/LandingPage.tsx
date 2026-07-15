@@ -6,12 +6,12 @@ const STEPS = [
   {
     n: "01 · CONNECT",
     title: "Point it at your inbox",
-    body: "Connect Gmail. Sidekick scans the last 30 days on day one, so your first ledger is full in minutes. Nothing to set up.",
+    body: "Connect Gmail. Sorrel scans your recent mail on day one, so your first ledger is full in minutes. Nothing to set up.",
   },
   {
     n: "02 · EXTRACT",
     title: "It finds the promises",
-    body: "Sidekick reads your mail for real commitments — \"I'll send Friday,\" \"can you confirm?\" — and skips the noise like \"let's grab coffee sometime.\"",
+    body: "Sorrel reads your mail for real commitments — \"I'll send Friday,\" \"can you confirm?\" — and skips the noise like \"let's grab coffee sometime.\"",
   },
   {
     n: "03 · CLOSE",
@@ -36,7 +36,7 @@ export default function LandingPage() {
             by you.
           </h1>
           <p className="mt-5 max-w-md text-base text-ink-soft">
-            Sidekick reads your inbox and quietly tracks the commitments
+            Sorrel reads your inbox and quietly tracks the commitments
             hiding inside it — the ones you made and the ones people made to
             you — then nudges before anything slips. No typing. No lists to
             maintain.
@@ -78,7 +78,7 @@ export default function LandingPage() {
       </main>
 
       <footer className="mt-auto flex items-center justify-between border-t border-line px-6 py-6 font-mono text-xs text-ink-soft">
-        <span>Sidekick</span>
+        <span>sorrel</span>
         <span>the commitment layer for work &amp; life</span>
       </footer>
     </div>
