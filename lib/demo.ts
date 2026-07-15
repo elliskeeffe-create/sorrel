@@ -4,10 +4,12 @@
 
 export type Direction = "OWED_TO_YOU" | "OWED_BY_YOU";
 export type DemoFolder = "personal" | "business";
+export type Priority = "HIGH_PRIORITY" | "REPLY_DEBT" | "QUICK_WIN";
 
 export interface DemoRowData {
   id: string;
   direction: Direction;
+  priority: Priority;
   folder: DemoFolder;
   who: string;
   text: string;
@@ -164,6 +166,7 @@ export const DEMO_ROWS: DemoRowData[] = [
   {
     id: "row-piero",
     direction: "OWED_BY_YOU",
+    priority: "HIGH_PRIORITY",
     folder: "personal",
     who: "Piero",
     text: "you told him you'd send the signed lease docs.",
@@ -174,6 +177,7 @@ export const DEMO_ROWS: DemoRowData[] = [
   {
     id: "row-jake",
     direction: "OWED_TO_YOU",
+    priority: "REPLY_DEBT",
     folder: "business",
     who: "Jake",
     text: "said he'd confirm the activation fee applies to both plans.",
@@ -184,6 +188,7 @@ export const DEMO_ROWS: DemoRowData[] = [
   {
     id: "row-landlord",
     direction: "OWED_TO_YOU",
+    priority: "REPLY_DEBT",
     folder: "personal",
     who: "Landlord",
     text: "promised to fix the radiator before winter.",
@@ -193,6 +198,7 @@ export const DEMO_ROWS: DemoRowData[] = [
   {
     id: "row-dana",
     direction: "OWED_BY_YOU",
+    priority: "HIGH_PRIORITY",
     folder: "business",
     who: "The client",
     text: "you said you'd get them pricing by EOD Thursday.",
@@ -202,6 +208,7 @@ export const DEMO_ROWS: DemoRowData[] = [
   {
     id: "row-design",
     direction: "OWED_TO_YOU",
+    priority: "HIGH_PRIORITY",
     folder: "business",
     who: "Design team",
     text: "owes you the revised mockups.",
@@ -211,6 +218,7 @@ export const DEMO_ROWS: DemoRowData[] = [
   {
     id: "row-dentist",
     direction: "OWED_BY_YOU",
+    priority: "QUICK_WIN",
     folder: "personal",
     who: "Cedar Dental",
     text: "asked you to confirm the cleaning on the 22nd.",
@@ -220,6 +228,7 @@ export const DEMO_ROWS: DemoRowData[] = [
   {
     id: "row-mom",
     direction: "OWED_BY_YOU",
+    priority: "QUICK_WIN",
     folder: "personal",
     who: "Mom",
     text: "asked you to call her this weekend.",
@@ -229,6 +238,7 @@ export const DEMO_ROWS: DemoRowData[] = [
   {
     id: "row-priya",
     direction: "OWED_TO_YOU",
+    priority: "REPLY_DEBT",
     folder: "personal",
     who: "Priya",
     text: 'said she\'d "look into" flights for the reunion.',
@@ -238,6 +248,7 @@ export const DEMO_ROWS: DemoRowData[] = [
   {
     id: "row-sarah",
     direction: "OWED_BY_YOU",
+    priority: "QUICK_WIN",
     folder: "business",
     who: "Sarah",
     text: 'you\'d "circle back" on the intro.',
@@ -248,6 +259,7 @@ export const DEMO_ROWS: DemoRowData[] = [
   {
     id: "row-alex",
     direction: "OWED_BY_YOU",
+    priority: "QUICK_WIN",
     folder: "business",
     who: "Alex",
     text: "you said you'd send the June invoice.",
@@ -354,6 +366,7 @@ export function parseChat(
     return {
       row: {
         direction: "OWED_TO_YOU",
+        priority: m[3] ? "HIGH_PRIORITY" : "QUICK_WIN",
         folder: "personal",
         who: cap(m[1]),
         text: `owes you the ${m[2]}.`,
@@ -369,6 +382,7 @@ export function parseChat(
     return {
       row: {
         direction: "OWED_BY_YOU",
+        priority: m[3] ? "HIGH_PRIORITY" : "QUICK_WIN",
         folder: "personal",
         who: cap(m[1]),
         text: `you owe them the ${m[2]}.`,
@@ -382,6 +396,7 @@ export function parseChat(
   return {
     row: {
       direction: "OWED_BY_YOU",
+      priority: "QUICK_WIN",
       folder: "personal",
       who: "You",
       text: text.endsWith(".") ? text : `${text}.`,

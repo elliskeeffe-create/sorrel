@@ -23,6 +23,18 @@ function emailById(id: string): DemoEmail | undefined {
   return DEMO_EMAILS.find((e) => e.id === id);
 }
 
+const PRIORITY_LABEL: Record<DemoRowData["priority"], string> = {
+  HIGH_PRIORITY: "high priority",
+  REPLY_DEBT: "reply debt",
+  QUICK_WIN: "quick win",
+};
+
+const PRIORITY_CLASS: Record<DemoRowData["priority"], string> = {
+  HIGH_PRIORITY: "bg-owed-by-bg text-owed-by",
+  REPLY_DEBT: "bg-paper text-ink-soft border border-line",
+  QUICK_WIN: "bg-owed-you-bg text-owed-you",
+};
+
 // ---------- row ----------
 
 function DemoRow({
@@ -57,13 +69,29 @@ function DemoRow({
         >
           <span className="font-semibold">{row.who}</span> {row.text}
         </p>
-        <span
-          className={`mt-1 block font-mono text-xs ${
-            row.hot && !row.done ? "text-owed-by" : "text-ink-soft"
-          }`}
-        >
-          {row.meta}
-        </span>
+        {!row.done && (
+          <span className="mt-1 flex flex-wrap items-center gap-2">
+            <span
+              className={`font-mono text-xs ${
+                row.hot ? "text-owed-by" : "text-ink-soft"
+              }`}
+            >
+              {row.meta}
+            </span>
+            <span
+              className={`rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide ${
+                PRIORITY_CLASS[row.priority]
+              }`}
+            >
+              {PRIORITY_LABEL[row.priority]}
+            </span>
+          </span>
+        )}
+        {row.done && (
+          <span className="mt-1 block font-mono text-xs text-ink-soft">
+            {row.meta}
+          </span>
+        )}
         <span className="mt-1.5 flex items-center gap-3">
           {sourceEmail ? (
             <button

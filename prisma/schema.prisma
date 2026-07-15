@@ -71,10 +71,20 @@ enum CommitmentStatus {
   SNOOZED
 }
 
+// Urgency bucket, independent of direction. Direction (owed to/by you)
+// drives which ledger column a row sits in; priority drives how it's
+// flagged within that column.
+enum CommitmentPriority {
+  HIGH_PRIORITY
+  REPLY_DEBT
+  QUICK_WIN
+}
+
 model Commitment {
   id                    String              @id @default(cuid())
   userId                String
   direction             CommitmentDirection
+  priority              CommitmentPriority  @default(QUICK_WIN)
   counterparty          String
   description           String
   dueDate               DateTime?
