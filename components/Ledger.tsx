@@ -11,6 +11,7 @@ export default function Ledger() {
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<"open" | "done">("open");
 
   const loadCommitments = useCallback(async () => {
     try {
@@ -72,6 +73,12 @@ export default function Ledger() {
     (c) => c.direction === "OWED_BY_YOU" && c.status !== "DONE"
   );
   const openCount = owedToYou.length + owedByYou.length;
+  const doneRows = commitments
+    .filter((c) => c.status === "DONE")
+    .sort(
+      (a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
 
   return (
     <div className="mx-auto w-full max-w-4xl px-6 py-10">
@@ -105,34 +112,73 @@ export default function Ledger() {
 
       {commitments.length > 0 && (
         <div className="overflow-hidden rounded-xl border border-line bg-card shadow-[0_1px_0_rgba(0,0,0,0.02),0_18px_40px_-28px_rgba(0,0,0,0.25)]">
-          <div className="grid grid-cols-1 font-mono text-[11px] uppercase tracking-wider sm:grid-cols-2">
-            <div className="bg-owed-you px-5 py-3 text-white">
-              Owed to you ↗
-            </div>
-            <div className="bg-owed-by px-5 py-3 text-white">
-              Owed by you ↘
-            </div>
+          <div className="flex gap-1 border-b border-line bg-paper px-4 py-2.5">
+            <button
+              onClick={() => setView("open")}
+              className={`rounded px-2.5 py-1 font-mono text-[11px] uppercase tracking-wider ${
+                view === "open"
+                  ? "bg-ink text-paper"
+                  : "text-ink-soft hover:text-ink"
+              }`}
+            >
+              Open loops
+            </button>
+            <button
+              onClick={() => setView("done")}
+              className={`rounded px-2.5 py-1 font-mono text-[11px] uppercase tracking-wider ${
+                view === "done"
+                  ? "bg-ink text-paper"
+                  : "text-ink-soft hover:text-ink"
+              }`}
+            >
+              Recently completed{doneRows.length > 0 ? ` · ${doneRows.length}` : ""}
+            </button>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2">
-            <div className="border-line sm:border-r">
-              {owedToYou.length === 0 ? (
-                <p className="px-5 py-4 text-sm text-ink-soft">All clear.</p>
-              ) : (
-                owedToYou.map((c) => (
-                  <LedgerRow key={c.id} commitment={c} onMarkDone={markDone} />
-                ))
-              )}
-            </div>
+
+          {view === "open" ? (
+            <>
+              <div className="grid grid-cols-1 font-mono text-[11px] uppercase tracking-wider sm:grid-cols-2">
+                <div className="bg-owed-you px-5 py-3 text-white">
+                  Owed to you ↗
+                </div>
+                <div className="bg-owed-by px-5 py-3 text-white">
+                  Owed by you ↘
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2">
+                <div className="border-line sm:border-r">
+                  {owedToYou.length === 0 ? (
+                    <p className="px-5 py-4 text-sm text-ink-soft">All clear.</p>
+                  ) : (
+                    owedToYou.map((c) => (
+                      <LedgerRow key={c.id} commitment={c} onMarkDone={markDone} />
+                    ))
+                  )}
+                </div>
+                <div>
+                  {owedByYou.length === 0 ? (
+                    <p className="px-5 py-4 text-sm text-ink-soft">All clear.</p>
+                  ) : (
+                    owedByYou.map((c) => (
+                      <LedgerRow key={c.id} commitment={c} onMarkDone={markDone} />
+                    ))
+                  )}
+                </div>
+              </div>
+            </>
+          ) : (
             <div>
-              {owedByYou.length === 0 ? (
-                <p className="px-5 py-4 text-sm text-ink-soft">All clear.</p>
+              {doneRows.length === 0 ? (
+                <p className="px-5 py-4 text-sm text-ink-soft">
+                  Nothing completed yet.
+                </p>
               ) : (
-                owedByYou.map((c) => (
+                doneRows.map((c) => (
                   <LedgerRow key={c.id} commitment={c} onMarkDone={markDone} />
                 ))
               )}
             </div>
-          </div>
+          )}
         </div>
       )}
     </div>

@@ -6,6 +6,7 @@ export interface CommitmentDTO {
   dueDate: string | null;
   status: "OPEN" | "DONE" | "SNOOZED";
   confidence: number;
+  sourceGmailMessageId: string;
   sourceSnippet: string;
   createdAt: string;
   updatedAt: string;

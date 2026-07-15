@@ -55,6 +55,15 @@ export default function LedgerRow({
             {dueLabel}
           </span>
         )}
+        <a
+          href={`https://mail.google.com/mail/u/0/#all/${commitment.sourceGmailMessageId}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={commitment.sourceSnippet}
+          className="mt-1.5 block truncate font-mono text-[11px] text-ink-soft underline-offset-4 hover:text-ink hover:underline"
+        >
+          ✉ view source in Gmail
+        </a>
       </div>
       {!isDone && (
         <button

@@ -13,8 +13,11 @@ export async function POST() {
 
   const userId = session.user.id;
 
+  // Default lookback is 14 days for active/short-term commitments.
+  // Longer-horizon tracking (extending by stated due date rather than email
+  // age) is a planned follow-up in the extraction pipeline.
   const messages = await listRecentMessages(userId, {
-    days: 30,
+    days: 14,
     maxResults: 50,
   });
 
