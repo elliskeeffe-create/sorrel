@@ -1,17 +1,28 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import type { CommitmentDTO } from "@/lib/types";
 import LedgerRow from "@/components/LedgerRow";
-import SyncButton from "@/components/SyncButton";
+
+type View = "open" | "snoozed" | "done";
+
+const SYNC_INTERVAL_MS = 10_000;
+
+function isOverdueOrToday(dueDate: string | null): boolean {
+  if (!dueDate) return false;
+  const date = new Date(dueDate);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return date.getTime() <= today.getTime();
+}
 
 export default function Ledger() {
   const [commitments, setCommitments] = useState<CommitmentDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<"open" | "done">("open");
+  const [view, setView] = useState<View>("open");
+  const syncingRef = useRef(false);
 
   const loadCommitments = useCallback(async () => {
     try {
@@ -27,52 +38,61 @@ export default function Ledger() {
     }
   }, []);
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial data fetch on mount
-    loadCommitments();
-  }, [loadCommitments]);
-
-  const handleSync = async () => {
+  const runSync = useCallback(async () => {
+    if (syncingRef.current) return;
+    syncingRef.current = true;
     setSyncing(true);
-    setSyncMessage(null);
-    setError(null);
     try {
       const res = await fetch("/api/sync", { method: "POST" });
       if (!res.ok) throw new Error("Sync failed.");
-      const data = await res.json();
-      setSyncMessage(
-        `Scanned ${data.emailsScanned} new email${
-          data.emailsScanned === 1 ? "" : "s"
-        } · found ${data.commitmentsCreated} commitment${
-          data.commitmentsCreated === 1 ? "" : "s"
-        }`
-      );
       await loadCommitments();
+      setError(null);
     } catch {
-      setError("Sync failed. Try again in a moment.");
+      setError("Sync failed. Retrying automatically.");
     } finally {
+      syncingRef.current = false;
       setSyncing(false);
     }
-  };
+  }, [loadCommitments]);
 
-  const markDone = async (id: string) => {
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial data fetch on mount
+    loadCommitments();
+    runSync();
+    const interval = setInterval(runSync, SYNC_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [loadCommitments, runSync]);
+
+  const setStatus = async (
+    id: string,
+    status: "OPEN" | "SNOOZED" | "DONE"
+  ) => {
     setCommitments((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, status: "DONE" } : c))
+      prev.map((c) => (c.id === id ? { ...c, status } : c))
     );
     await fetch(`/api/commitments/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "DONE" }),
+      body: JSON.stringify({ status }),
     });
   };
 
+  const markDone = (id: string) => setStatus(id, "DONE");
+  const snooze = (id: string) => setStatus(id, "SNOOZED");
+  const reopen = (id: string) => setStatus(id, "OPEN");
+
   const owedToYou = commitments.filter(
-    (c) => c.direction === "OWED_TO_YOU" && c.status !== "DONE"
+    (c) => c.direction === "OWED_TO_YOU" && c.status === "OPEN"
   );
   const owedByYou = commitments.filter(
-    (c) => c.direction === "OWED_BY_YOU" && c.status !== "DONE"
+    (c) => c.direction === "OWED_BY_YOU" && c.status === "OPEN"
   );
   const openCount = owedToYou.length + owedByYou.length;
+  const hotCount = [...owedToYou, ...owedByYou].filter((c) =>
+    isOverdueOrToday(c.dueDate)
+  ).length;
+
+  const snoozedRows = commitments.filter((c) => c.status === "SNOOZED");
   const doneRows = commitments
     .filter((c) => c.status === "DONE")
     .sort(
@@ -87,35 +107,44 @@ export default function Ledger() {
           <h1 className="font-serif text-2xl font-medium tracking-tight text-ink">
             Your ledger
           </h1>
-          <p className="mt-1 font-mono text-xs text-ink-soft">
-            {loading ? "loading…" : `${openCount} open loop${openCount === 1 ? "" : "s"}`}
+          <p className="mt-1 font-serif text-xs text-ink-soft">
+            {loading
+              ? "loading…"
+              : `${openCount} open loop${openCount === 1 ? "" : "s"}${
+                  hotCount > 0
+                    ? ` · ${hotCount} need${hotCount === 1 ? "s" : ""} attention`
+                    : ""
+                }`}
           </p>
         </div>
-        <SyncButton onSync={handleSync} syncing={syncing} />
+        <div className="flex items-center gap-2 font-serif text-xs text-ink-soft">
+          <span
+            className={`h-2 w-2 rounded-full ${
+              syncing ? "animate-pulse bg-owed-you" : "bg-line"
+            }`}
+          />
+          {syncing ? "syncing…" : "watching your inbox"}
+        </div>
       </div>
 
-      {syncMessage && (
-        <p className="mb-4 font-mono text-xs text-owed-you">{syncMessage}</p>
-      )}
-      {error && (
-        <p className="mb-4 font-mono text-xs text-owed-by">{error}</p>
-      )}
+      {error && <p className="mb-4 font-serif text-xs text-owed-by">{error}</p>}
 
       {!loading && commitments.length === 0 && (
         <div className="rounded-xl border border-line bg-card px-6 py-12 text-center">
           <p className="font-serif text-lg text-ink">Nothing here yet.</p>
           <p className="mt-2 text-sm text-ink-soft">
-            Click sync inbox to scan your recent email for commitments.
+            Sorrel is quietly scanning your inbox — open loops will appear
+            here automatically.
           </p>
         </div>
       )}
 
       {commitments.length > 0 && (
         <div className="overflow-hidden rounded-xl border border-line bg-card shadow-[0_1px_0_rgba(0,0,0,0.02),0_18px_40px_-28px_rgba(0,0,0,0.25)]">
-          <div className="flex gap-1 border-b border-line bg-paper px-4 py-2.5">
+          <div className="flex flex-wrap gap-1 border-b border-line bg-paper px-4 py-2.5">
             <button
               onClick={() => setView("open")}
-              className={`rounded px-2.5 py-1 font-mono text-[11px] uppercase tracking-wider ${
+              className={`rounded px-2.5 py-1 font-serif text-[11px] uppercase tracking-wider ${
                 view === "open"
                   ? "bg-ink text-paper"
                   : "text-ink-soft hover:text-ink"
@@ -124,20 +153,31 @@ export default function Ledger() {
               Open loops
             </button>
             <button
+              onClick={() => setView("snoozed")}
+              className={`rounded px-2.5 py-1 font-serif text-[11px] uppercase tracking-wider ${
+                view === "snoozed"
+                  ? "bg-ink text-paper"
+                  : "text-ink-soft hover:text-ink"
+              }`}
+            >
+              Snoozed{snoozedRows.length > 0 ? ` · ${snoozedRows.length}` : ""}
+            </button>
+            <button
               onClick={() => setView("done")}
-              className={`rounded px-2.5 py-1 font-mono text-[11px] uppercase tracking-wider ${
+              className={`rounded px-2.5 py-1 font-serif text-[11px] uppercase tracking-wider ${
                 view === "done"
                   ? "bg-ink text-paper"
                   : "text-ink-soft hover:text-ink"
               }`}
             >
-              Recently completed{doneRows.length > 0 ? ` · ${doneRows.length}` : ""}
+              Recently completed
+              {doneRows.length > 0 ? ` · ${doneRows.length}` : ""}
             </button>
           </div>
 
-          {view === "open" ? (
+          {view === "open" && (
             <>
-              <div className="grid grid-cols-1 font-mono text-[11px] uppercase tracking-wider sm:grid-cols-2">
+              <div className="grid grid-cols-1 font-serif text-[11px] uppercase tracking-wider sm:grid-cols-2">
                 <div className="bg-owed-you px-5 py-3 text-white">
                   Owed to you ↗
                 </div>
@@ -148,25 +188,67 @@ export default function Ledger() {
               <div className="grid grid-cols-1 sm:grid-cols-2">
                 <div className="border-line sm:border-r">
                   {owedToYou.length === 0 ? (
-                    <p className="px-5 py-4 text-sm text-ink-soft">All clear.</p>
+                    <p className="px-5 py-4 text-sm text-ink-soft">
+                      All clear.
+                    </p>
                   ) : (
                     owedToYou.map((c) => (
-                      <LedgerRow key={c.id} commitment={c} onMarkDone={markDone} />
+                      <LedgerRow
+                        key={c.id}
+                        commitment={c}
+                        onMarkDone={markDone}
+                        onSnooze={snooze}
+                      />
                     ))
                   )}
                 </div>
                 <div>
                   {owedByYou.length === 0 ? (
-                    <p className="px-5 py-4 text-sm text-ink-soft">All clear.</p>
+                    <p className="px-5 py-4 text-sm text-ink-soft">
+                      All clear.
+                    </p>
                   ) : (
                     owedByYou.map((c) => (
-                      <LedgerRow key={c.id} commitment={c} onMarkDone={markDone} />
+                      <LedgerRow
+                        key={c.id}
+                        commitment={c}
+                        onMarkDone={markDone}
+                        onSnooze={snooze}
+                      />
                     ))
                   )}
                 </div>
               </div>
+              <div className="flex items-center justify-between border-t border-line bg-paper px-5 py-2.5 font-serif text-[11px] text-ink-soft">
+                <span>
+                  {openCount} open loop{openCount === 1 ? "" : "s"} ·{" "}
+                  {hotCount} need{hotCount === 1 ? "s" : ""} attention
+                </span>
+                <span>synced from Gmail</span>
+              </div>
             </>
-          ) : (
+          )}
+
+          {view === "snoozed" && (
+            <div>
+              {snoozedRows.length === 0 ? (
+                <p className="px-5 py-4 text-sm text-ink-soft">
+                  Nothing snoozed.
+                </p>
+              ) : (
+                snoozedRows.map((c) => (
+                  <LedgerRow
+                    key={c.id}
+                    commitment={c}
+                    onMarkDone={markDone}
+                    onReopen={reopen}
+                  />
+                ))
+              )}
+            </div>
+          )}
+
+          {view === "done" && (
             <div>
               {doneRows.length === 0 ? (
                 <p className="px-5 py-4 text-sm text-ink-soft">

@@ -24,7 +24,7 @@
   --color-owed-by-bg: var(--owed-by-bg);
   --font-sans: var(--font-inter);
   --font-serif: var(--font-newsreader);
-  --font-mono: var(--font-jetbrains-mono);
+  --font-mono: var(--font-newsreader);
 }
 
 body {
