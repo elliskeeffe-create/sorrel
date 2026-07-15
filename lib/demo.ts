@@ -19,27 +19,21 @@ export interface DemoRowData {
 
 export interface DemoEmail {
   id: string;
-  folder: DemoFolder;
   from: string;
-  address: string;
-  sent?: boolean;
   subject: string;
-  preview: string;
   date: string;
   body: string[];
   highlight?: string;
-  row?: Omit<DemoRowData, "id" | "source">;
+  direction?: Direction;
 }
 
+// Source emails backing the ledger rows — opened via the "view source"
+// receipt on each row.
 export const DEMO_EMAILS: DemoEmail[] = [
   {
     id: "piero-lease",
-    folder: "personal",
     from: "You → Piero Rossi",
-    address: "piero.rossi@gmail.com",
-    sent: true,
     subject: "Re: apartment lease",
-    preview: "Sounds good — I'll send over the signed lease docs by Friday.",
     date: "Jul 3",
     body: [
       "Hi Piero,",
@@ -47,22 +41,12 @@ export const DEMO_EMAILS: DemoEmail[] = [
       "Ellis",
     ],
     highlight: "I'll send over the signed lease docs by Friday.",
-    row: {
-      direction: "OWED_BY_YOU",
-      folder: "personal",
-      who: "Piero",
-      text: "you told him you'd send the signed lease docs.",
-      meta: "promised Friday · overdue",
-      hot: true,
-    },
+    direction: "OWED_BY_YOU",
   },
   {
     id: "jake-pricing",
-    folder: "business",
     from: "Jake Miller",
-    address: "jake@vantageapp.io",
     subject: "Re: plan pricing question",
-    preview: "Let me double-check whether the activation fee applies to both…",
     date: "Jul 8",
     body: [
       "Hey Ellis,",
@@ -71,34 +55,12 @@ export const DEMO_EMAILS: DemoEmail[] = [
     ],
     highlight:
       "Let me double-check whether the activation fee applies to both plans and confirm by tomorrow.",
-    row: {
-      direction: "OWED_TO_YOU",
-      folder: "business",
-      who: "Jake",
-      text: "said he'd confirm the activation fee applies to both plans.",
-      meta: "no reply · 6 days · nudge ready",
-      hot: true,
-    },
-  },
-  {
-    id: "store-promo",
-    folder: "personal",
-    from: "Campus Store",
-    address: "deals@store.example.com",
-    subject: "Don't wait — shop early for the best selection",
-    preview: "View online · CLOTHING · up to 40% off this week only…",
-    date: "Jul 9",
-    body: [
-      "Don't wait — shop early for the best selection. Up to 40% off clothing this week only.",
-    ],
+    direction: "OWED_TO_YOU",
   },
   {
     id: "landlord-radiator",
-    folder: "personal",
     from: "Dan Kowalski (landlord)",
-    address: "dan.kowalski@rentwell.com",
     subject: "Re: radiator in the bedroom",
-    preview: "I'll have someone out to fix the radiator next week.",
     date: "Jul 3",
     body: [
       "Ellis,",
@@ -106,22 +68,12 @@ export const DEMO_EMAILS: DemoEmail[] = [
       "Dan",
     ],
     highlight: "I'll have someone out to fix the radiator next week",
-    row: {
-      direction: "OWED_TO_YOU",
-      folder: "personal",
-      who: "Landlord",
-      text: "promised to fix the radiator before winter.",
-      meta: 'said "next week" · 11 days ago',
-    },
+    direction: "OWED_TO_YOU",
   },
   {
     id: "dana-pricing",
-    folder: "business",
     from: "You → Dana Whitfield",
-    address: "dana@northbeam.co",
-    sent: true,
     subject: "Re: proposal follow-up",
-    preview: "You'll have full pricing from me by EOD Thursday.",
     date: "Jul 13",
     body: [
       "Dana,",
@@ -129,43 +81,12 @@ export const DEMO_EMAILS: DemoEmail[] = [
       "Ellis",
     ],
     highlight: "You'll have full pricing from me by EOD Thursday",
-    row: {
-      direction: "OWED_BY_YOU",
-      folder: "business",
-      who: "The client",
-      text: "you said you'd get them pricing by EOD Thursday.",
-      meta: "due in 4 hrs · draft waiting",
-    },
-  },
-  {
-    id: "sarah-intro",
-    folder: "business",
-    from: "Sarah Lin",
-    address: "sarah.lin@parcelworks.com",
-    subject: "Re: intro to Marcus — thank you!",
-    preview: "This is perfect, thank you for connecting us!",
-    date: "Jul 11",
-    body: [
-      "Ellis — this is perfect, thank you for connecting us! Marcus and I are grabbing time this week.",
-      "Sarah",
-    ],
-    highlight: "thank you for connecting us!",
-    row: {
-      direction: "OWED_BY_YOU",
-      folder: "business",
-      who: "Sarah",
-      text: 'you\'d "circle back" on the intro.',
-      meta: "done · auto-closed ✓",
-      done: true,
-    },
+    direction: "OWED_BY_YOU",
   },
   {
     id: "design-mockups",
-    folder: "business",
     from: "Maya Chen",
-    address: "maya@studiofern.com",
     subject: "Revised mockups",
-    preview: "Revised mockups coming your way by Thursday.",
     date: "Jul 10",
     body: [
       "Hi Ellis,",
@@ -173,68 +94,166 @@ export const DEMO_EMAILS: DemoEmail[] = [
       "Maya",
     ],
     highlight: "Revised mockups coming your way by Thursday",
-    row: {
-      direction: "OWED_TO_YOU",
-      folder: "business",
-      who: "Design team",
-      text: "owes you the revised mockups.",
-      meta: "due today · on track",
-    },
-  },
-  {
-    id: "newsletter",
-    folder: "personal",
-    from: "The Weekly Ledger",
-    address: "hello@weeklyledger.email",
-    subject: "5 links on calm software",
-    preview: "This week: why the best tools stay out of your way…",
-    date: "Jul 12",
-    body: [
-      "This week: why the best tools stay out of your way, and other links on calm software.",
-    ],
-  },
-  {
-    id: "alex-invoice",
-    folder: "business",
-    from: "Alex Okafor",
-    address: "alex@brightpine.dev",
-    subject: "Re: June invoice — received",
-    preview: "Got it, thanks! Processing for payment this week.",
-    date: "Jul 12",
-    body: [
-      "Got it, thanks! Processing for payment this week.",
-      "Alex",
-    ],
-    highlight: "Got it, thanks!",
-    row: {
-      direction: "OWED_BY_YOU",
-      folder: "business",
-      who: "Alex",
-      text: "you said you'd send the June invoice.",
-      meta: "delivered · auto-closed ✓",
-      done: true,
-    },
+    direction: "OWED_TO_YOU",
   },
   {
     id: "dentist",
-    folder: "personal",
     from: "Cedar Dental",
-    address: "frontdesk@cedardental.com",
     subject: "Please confirm your cleaning on the 22nd",
-    preview: "Reply to confirm your appointment for Tuesday July 22 at 9:30am.",
     date: "Jul 13",
     body: [
       "Hi Ellis,",
       "Reply to confirm your appointment for Tuesday July 22 at 9:30am. If we don't hear back by the 18th we may release the slot.",
     ],
     highlight: "Reply to confirm your appointment for Tuesday July 22 at 9:30am.",
-    row: {
-      direction: "OWED_BY_YOU",
-      folder: "personal",
-      who: "Cedar Dental",
-      text: "asked you to confirm the cleaning on the 22nd.",
-      meta: "due by the 18th",
-    },
+    direction: "OWED_BY_YOU",
+  },
+  {
+    id: "mom-call",
+    from: "Mom",
+    subject: "this weekend?",
+    date: "Jul 12",
+    body: [
+      "Hi sweetheart,",
+      "Give me a call this weekend when you get a chance — want to hear how the new place is coming along.",
+      "Love, Mom",
+    ],
+    highlight: "Give me a call this weekend when you get a chance",
+    direction: "OWED_BY_YOU",
+  },
+  {
+    id: "priya-flights",
+    from: "Priya Nair",
+    subject: "Re: reunion planning",
+    date: "Jul 11",
+    body: [
+      "So excited this is happening!!",
+      "I'll look into flights for the reunion weekend and report back with options.",
+      "Priya",
+    ],
+    highlight: "I'll look into flights for the reunion weekend",
+    direction: "OWED_TO_YOU",
+  },
+  {
+    id: "sarah-intro",
+    from: "Sarah Lin",
+    subject: "Re: intro to Marcus — thank you!",
+    date: "Jul 11",
+    body: [
+      "Ellis — this is perfect, thank you for connecting us! Marcus and I are grabbing time this week.",
+      "Sarah",
+    ],
+    highlight: "thank you for connecting us!",
+    direction: "OWED_BY_YOU",
+  },
+  {
+    id: "alex-invoice",
+    from: "Alex Okafor",
+    subject: "Re: June invoice — received",
+    date: "Jul 12",
+    body: ["Got it, thanks! Processing for payment this week.", "Alex"],
+    highlight: "Got it, thanks!",
+    direction: "OWED_BY_YOU",
+  },
+];
+
+// The ledger itself. Deliberately loose about what counts: hard promises,
+// soft "I'll look into it"s, asks from family, appointments to confirm —
+// anything someone still expects from someone else.
+export const DEMO_ROWS: DemoRowData[] = [
+  {
+    id: "row-piero",
+    direction: "OWED_BY_YOU",
+    folder: "personal",
+    who: "Piero",
+    text: "you told him you'd send the signed lease docs.",
+    meta: "promised Friday · overdue",
+    hot: true,
+    source: { kind: "email", emailId: "piero-lease" },
+  },
+  {
+    id: "row-jake",
+    direction: "OWED_TO_YOU",
+    folder: "business",
+    who: "Jake",
+    text: "said he'd confirm the activation fee applies to both plans.",
+    meta: "no reply · 6 days · nudge ready",
+    hot: true,
+    source: { kind: "email", emailId: "jake-pricing" },
+  },
+  {
+    id: "row-landlord",
+    direction: "OWED_TO_YOU",
+    folder: "personal",
+    who: "Landlord",
+    text: "promised to fix the radiator before winter.",
+    meta: 'said "next week" · 11 days ago',
+    source: { kind: "email", emailId: "landlord-radiator" },
+  },
+  {
+    id: "row-dana",
+    direction: "OWED_BY_YOU",
+    folder: "business",
+    who: "The client",
+    text: "you said you'd get them pricing by EOD Thursday.",
+    meta: "due in 4 hrs · draft waiting",
+    source: { kind: "email", emailId: "dana-pricing" },
+  },
+  {
+    id: "row-design",
+    direction: "OWED_TO_YOU",
+    folder: "business",
+    who: "Design team",
+    text: "owes you the revised mockups.",
+    meta: "due today · on track",
+    source: { kind: "email", emailId: "design-mockups" },
+  },
+  {
+    id: "row-dentist",
+    direction: "OWED_BY_YOU",
+    folder: "personal",
+    who: "Cedar Dental",
+    text: "asked you to confirm the cleaning on the 22nd.",
+    meta: "due by the 18th",
+    source: { kind: "email", emailId: "dentist" },
+  },
+  {
+    id: "row-mom",
+    direction: "OWED_BY_YOU",
+    folder: "personal",
+    who: "Mom",
+    text: "asked you to call her this weekend.",
+    meta: "soft ask · no deadline",
+    source: { kind: "email", emailId: "mom-call" },
+  },
+  {
+    id: "row-priya",
+    direction: "OWED_TO_YOU",
+    folder: "personal",
+    who: "Priya",
+    text: 'said she\'d "look into" flights for the reunion.',
+    meta: "soft promise · 3 days ago",
+    source: { kind: "email", emailId: "priya-flights" },
+  },
+  {
+    id: "row-sarah",
+    direction: "OWED_BY_YOU",
+    folder: "business",
+    who: "Sarah",
+    text: 'you\'d "circle back" on the intro.',
+    meta: "done · auto-closed ✓",
+    done: true,
+    source: { kind: "email", emailId: "sarah-intro" },
+  },
+  {
+    id: "row-alex",
+    direction: "OWED_BY_YOU",
+    folder: "business",
+    who: "Alex",
+    text: "you said you'd send the June invoice.",
+    meta: "delivered · auto-closed ✓",
+    done: true,
+    source: { kind: "email", emailId: "alex-invoice" },
   },
 ];
 
@@ -282,22 +301,22 @@ export function clearSurvey() {
   }
 }
 
-// Which side of the ledger lands first: owed-to-you if "know what people
+// Which side of the ledger fills first: owed-to-you if "know what people
 // owe me" was picked, owed-by-you otherwise.
-export function orderEmails(
-  emails: DemoEmail[],
+export function orderRows(
+  rows: DemoRowData[],
   answers: SurveyAnswers | null
-): DemoEmail[] {
+): DemoRowData[] {
   const preferred: Direction = answers?.priorities.includes("owed-me")
     ? "OWED_TO_YOU"
     : "OWED_BY_YOU";
-  const ordered = [...emails];
+  const ordered = [...rows];
   const firstMatch = ordered.findIndex(
-    (e) => e.row && !e.row.done && e.row.direction === preferred
+    (r) => !r.done && r.direction === preferred
   );
   if (firstMatch > 0) {
-    const [email] = ordered.splice(firstMatch, 1);
-    ordered.unshift(email);
+    const [row] = ordered.splice(firstMatch, 1);
+    ordered.unshift(row);
   }
   return ordered;
 }

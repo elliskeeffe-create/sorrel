@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   DEMO_EMAILS,
+  DEMO_ROWS,
   demoHeadline,
-  orderEmails,
+  orderRows,
   parseChat,
   type DemoEmail,
   type DemoFolder,
@@ -12,7 +13,6 @@ import {
   type SurveyAnswers,
 } from "@/lib/demo";
 
-type ScanOutcome = "none" | "extracted" | "closed";
 type Phase = "idle" | "running" | "settled";
 type View = "open" | "done";
 type FolderFilter = "all" | DemoFolder;
@@ -28,9 +28,11 @@ function emailById(id: string): DemoEmail | undefined {
 function DemoRow({
   row,
   onSource,
+  onDone,
 }: {
   row: DemoRowData;
   onSource: (email: DemoEmail) => void;
+  onDone: (id: string) => void;
 }) {
   const toYou = row.direction === "OWED_TO_YOU";
   const sourceEmail =
@@ -38,20 +40,26 @@ function DemoRow({
 
   return (
     <div className="animate-settle group flex items-start gap-3 border-b border-line px-5 py-4 last:border-b-0">
-      <span
-        className={`mt-0.5 flex h-[18px] w-[18px] flex-none items-center justify-center rounded-[5px] text-[11px] font-semibold text-white ${
+      <button
+        onClick={() => !row.done && onDone(row.id)}
+        title={row.done ? "Completed" : "Mark done"}
+        className={`mt-0.5 flex h-[18px] w-[18px] flex-none items-center justify-center rounded-[5px] text-[11px] font-semibold text-white transition-opacity ${
           toYou ? "bg-owed-you" : "bg-owed-by"
-        }`}
+        } ${row.done ? "opacity-50" : "hover:opacity-80"}`}
       >
-        {toYou ? "↗" : "↘"}
-      </span>
+        {row.done ? "✓" : toYou ? "↗" : "↘"}
+      </button>
       <div className="min-w-0 flex-1">
-        <p className="text-sm leading-snug text-ink">
+        <p
+          className={`text-sm leading-snug ${
+            row.done ? "text-ink-soft" : "text-ink"
+          }`}
+        >
           <span className="font-semibold">{row.who}</span> {row.text}
         </p>
         <span
           className={`mt-1 block font-mono text-xs ${
-            row.hot ? "text-owed-by" : "text-ink-soft"
+            row.hot && !row.done ? "text-owed-by" : "text-ink-soft"
           }`}
         >
           {row.meta}
@@ -77,70 +85,13 @@ function DemoRow({
               >
                 snooze
               </button>
-              <button
-                className="hover:text-ink"
-                title="Preview — not wired up in the demo"
-              >
+              <button className="hover:text-ink" onClick={() => onDone(row.id)}>
                 done
               </button>
             </span>
           )}
         </span>
       </div>
-    </div>
-  );
-}
-
-// ---------- inbox card ----------
-
-function InboxCard({
-  email,
-  active,
-  outcome,
-}: {
-  email: DemoEmail;
-  active: boolean;
-  outcome: ScanOutcome | undefined;
-}) {
-  return (
-    <div
-      className={`border-b border-line px-4 py-3 last:border-b-0 ${
-        active ? "scan-target bg-owed-you-bg/40" : ""
-      } ${outcome === "none" ? "opacity-50" : ""}`}
-    >
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="truncate text-xs font-semibold text-ink">
-          {email.from}
-        </span>
-        <span className="flex-none font-mono text-[10px] text-ink-soft">
-          {email.date}
-        </span>
-      </div>
-      <p className="mt-0.5 truncate text-xs text-ink">{email.subject}</p>
-      <p className="mt-0.5 truncate text-[11px] text-ink-soft">
-        {email.preview}
-      </p>
-      {outcome && (
-        <span
-          className={`mt-1.5 inline-block rounded px-1.5 py-0.5 font-mono text-[10px] ${
-            outcome === "none"
-              ? "text-ink-soft"
-              : outcome === "closed"
-                ? "bg-owed-you-bg text-owed-you"
-                : email.row?.direction === "OWED_TO_YOU"
-                  ? "bg-owed-you-bg text-owed-you"
-                  : "bg-owed-by-bg text-owed-by"
-          }`}
-        >
-          {outcome === "none"
-            ? "no promises found"
-            : outcome === "closed"
-              ? "auto-closed ✓"
-              : email.row?.direction === "OWED_TO_YOU"
-                ? "↗ owed to you"
-                : "↘ owed by you"}
-        </span>
-      )}
     </div>
   );
 }
@@ -190,7 +141,7 @@ function SourceModal({
                   {before}
                   <mark
                     className={`rounded px-0.5 ${
-                      email.row?.direction === "OWED_TO_YOU"
+                      email.direction === "OWED_TO_YOU"
                         ? "bg-owed-you-bg"
                         : "bg-owed-by-bg"
                     }`}
@@ -250,8 +201,6 @@ export default function LiveDemo({
   onRetake: () => void;
 }) {
   const [phase, setPhase] = useState<Phase>("idle");
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [outcomes, setOutcomes] = useState<Record<string, ScanOutcome>>({});
   const [rows, setRows] = useState<DemoRowData[]>([]);
   const [view, setView] = useState<View>("open");
   const [folder, setFolder] = useState<FolderFilter>("all");
@@ -261,12 +210,9 @@ export default function LiveDemo({
   const [calendarConnected, setCalendarConnected] = useState(false);
   const genRef = useRef(0);
 
-  const ordered = orderEmails(DEMO_EMAILS, answers);
-
   const run = useCallback(async () => {
     const gen = ++genRef.current;
     setRows([]);
-    setOutcomes({});
     setAck(null);
     setView("open");
     setPhase("running");
@@ -274,44 +220,33 @@ export default function LiveDemo({
       "(prefers-reduced-motion: reduce)"
     ).matches;
 
-    for (const email of ordered) {
+    for (const row of orderRows(DEMO_ROWS, answers)) {
       if (genRef.current !== gen) return;
-      setActiveId(email.id);
-      if (!reduceMotion) await sleep(560);
-      if (genRef.current !== gen) return;
-
-      const outcome: ScanOutcome = !email.row
-        ? "none"
-        : email.row.done
-          ? "closed"
-          : "extracted";
-      setOutcomes((prev) => ({ ...prev, [email.id]: outcome }));
-      if (email.row) {
-        setRows((prev) => [
-          ...prev,
-          {
-            ...email.row!,
-            id: email.id,
-            source: { kind: "email", emailId: email.id },
-          },
-        ]);
-      }
-      if (!reduceMotion) await sleep(240);
+      setRows((prev) => [...prev, row]);
+      if (!reduceMotion) await sleep(420);
     }
     if (genRef.current !== gen) return;
-    setActiveId(null);
     setPhase("settled");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [answers]);
 
   useEffect(() => {
-    const timer = setTimeout(run, 600);
+    const timer = setTimeout(run, 500);
     return () => {
       clearTimeout(timer);
       // eslint-disable-next-line react-hooks/exhaustive-deps -- generation counter, not a DOM ref; bumping it cancels the in-flight run
       genRef.current++;
     };
   }, [run]);
+
+  const markDone = (id: string) => {
+    setRows((prev) =>
+      prev.map((r) =>
+        r.id === id
+          ? { ...r, done: true, hot: false, meta: "done · marked by you ✓" }
+          : r
+      )
+    );
+  };
 
   const visible = (r: DemoRowData) => folder === "all" || r.folder === folder;
   const openRows = rows.filter((r) => !r.done && visible(r));
@@ -338,178 +273,175 @@ export default function LiveDemo({
       <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-soft">
-            Live demo · a canned inbox, the real logic
+            Live demo · your first scan, simulated
           </p>
           <h3 className="mt-1 font-serif text-xl font-medium text-ink">
             {demoHeadline(answers)}
           </h3>
         </div>
-        <button
-          onClick={onRetake}
-          className="font-mono text-[11px] text-ink-soft underline-offset-4 hover:underline"
-        >
-          retake survey
-        </button>
+        <div className="flex items-center gap-4">
+          {phase === "settled" && (
+            <button
+              onClick={run}
+              className="font-mono text-[11px] text-owed-you underline-offset-4 hover:underline"
+            >
+              run it again ↻
+            </button>
+          )}
+          <button
+            onClick={onRetake}
+            className="font-mono text-[11px] text-ink-soft underline-offset-4 hover:underline"
+          >
+            retake survey
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(250px,300px)_1fr]">
-        {/* inbox */}
-        <div className="overflow-hidden rounded-xl border border-line bg-card">
-          <div className="flex items-center justify-between border-b border-line bg-paper px-4 py-2.5">
-            <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-ink-soft">
-              Inbox · last 14 days
-            </span>
-            {phase === "settled" && (
-              <button
-                onClick={run}
-                className="font-mono text-[11px] text-owed-you underline-offset-4 hover:underline"
-              >
-                run it again ↻
-              </button>
-            )}
+      <div className="flex flex-col overflow-hidden rounded-xl border border-line bg-card shadow-[0_1px_0_rgba(0,0,0,0.02),0_18px_40px_-28px_rgba(0,0,0,0.25)]">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-paper px-4 py-2.5">
+          <div className="flex gap-1">
+            <button
+              onClick={() => setView("open")}
+              className={`rounded px-2.5 py-1 font-mono text-[11px] uppercase tracking-[0.12em] ${
+                view === "open"
+                  ? "bg-ink text-paper"
+                  : "text-ink-soft hover:text-ink"
+              }`}
+            >
+              Open loops
+            </button>
+            <button
+              onClick={() => setView("done")}
+              className={`rounded px-2.5 py-1 font-mono text-[11px] uppercase tracking-[0.12em] ${
+                view === "done"
+                  ? "bg-ink text-paper"
+                  : "text-ink-soft hover:text-ink"
+              }`}
+            >
+              Recently completed{doneRows.length > 0 ? ` · ${doneRows.length}` : ""}
+            </button>
           </div>
-          <div>
-            {ordered.map((email) => (
-              <InboxCard
-                key={email.id}
-                email={email}
-                active={activeId === email.id}
-                outcome={outcomes[email.id]}
-              />
+          <div className="flex gap-1">
+            {(["all", "personal", "business"] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFolder(f)}
+                className={`rounded px-2 py-1 font-mono text-[10px] ${
+                  folder === f
+                    ? "bg-owed-you-bg text-owed-you"
+                    : "text-ink-soft hover:text-ink"
+                }`}
+              >
+                {f}
+              </button>
             ))}
           </div>
         </div>
 
-        {/* ledger */}
-        <div className="flex flex-col overflow-hidden rounded-xl border border-line bg-card shadow-[0_1px_0_rgba(0,0,0,0.02),0_18px_40px_-28px_rgba(0,0,0,0.25)]">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-paper px-4 py-2.5">
-            <div className="flex gap-1">
-              <button
-                onClick={() => setView("open")}
-                className={`rounded px-2.5 py-1 font-mono text-[11px] uppercase tracking-[0.12em] ${
-                  view === "open"
-                    ? "bg-ink text-paper"
-                    : "text-ink-soft hover:text-ink"
-                }`}
-              >
-                Open loops
-              </button>
-              <button
-                onClick={() => setView("done")}
-                className={`rounded px-2.5 py-1 font-mono text-[11px] uppercase tracking-[0.12em] ${
-                  view === "done"
-                    ? "bg-ink text-paper"
-                    : "text-ink-soft hover:text-ink"
-                }`}
-              >
-                Recently completed{doneRows.length > 0 ? ` · ${doneRows.length}` : ""}
-              </button>
-            </div>
-            <div className="flex gap-1">
-              {(["all", "personal", "business"] as const).map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setFolder(f)}
-                  className={`rounded px-2 py-1 font-mono text-[10px] ${
-                    folder === f
-                      ? "bg-owed-you-bg text-owed-you"
-                      : "text-ink-soft hover:text-ink"
-                  }`}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {view === "open" ? (
-            <>
-              <div className="grid grid-cols-1 font-mono text-[11px] uppercase tracking-[0.12em] sm:grid-cols-2">
-                <div className="bg-owed-you px-5 py-2.5 text-white">
-                  Owed to you ↗
-                </div>
-                <div className="bg-owed-by px-5 py-2.5 text-white">
-                  Owed by you ↘
-                </div>
+        {view === "open" ? (
+          <>
+            <div className="grid grid-cols-1 font-mono text-[11px] uppercase tracking-[0.12em] sm:grid-cols-2">
+              <div className="bg-owed-you px-5 py-2.5 text-white">
+                Owed to you ↗
               </div>
-              <div className="grid flex-1 grid-cols-1 sm:grid-cols-2">
-                <div className="sm:border-r sm:border-line">
-                  {owedToYou.length === 0 ? (
-                    <p className="px-5 py-4 font-mono text-xs text-ink-soft">
-                      {phase === "running" ? "scanning…" : "all clear"}
-                    </p>
-                  ) : (
-                    owedToYou.map((r) => (
-                      <DemoRow key={r.id} row={r} onSource={setModalEmail} />
-                    ))
-                  )}
-                </div>
-                <div>
-                  {owedByYou.length === 0 ? (
-                    <p className="px-5 py-4 font-mono text-xs text-ink-soft">
-                      {phase === "running" ? "scanning…" : "all clear"}
-                    </p>
-                  ) : (
-                    owedByYou.map((r) => (
-                      <DemoRow key={r.id} row={r} onSource={setModalEmail} />
-                    ))
-                  )}
-                </div>
+              <div className="bg-owed-by px-5 py-2.5 text-white">
+                Owed by you ↘
               </div>
-            </>
-          ) : (
-            <div className="flex-1">
-              {doneRows.length === 0 ? (
-                <p className="px-5 py-4 font-mono text-xs text-ink-soft">
-                  nothing closed yet — the scan is still running
-                </p>
-              ) : (
-                doneRows.map((r) => (
-                  <DemoRow key={r.id} row={r} onSource={setModalEmail} />
-                ))
-              )}
             </div>
-          )}
-
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line bg-paper px-4 py-2.5 font-mono text-[11px] text-ink-soft">
-            <span>
-              {openRows.length} open loop{openRows.length === 1 ? "" : "s"} ·{" "}
-              {hotCount} need{hotCount === 1 ? "s" : ""} attention
-            </span>
-            <span className="flex items-center gap-3">
-              {showReliability && (
-                <span className="text-owed-you">reliability 92% · 3-wk streak</span>
-              )}
-              <span>scanned just now</span>
-            </span>
-          </div>
-
-          {/* chat-add */}
-          <div className="border-t border-line px-4 py-3">
-            {ack && (
-              <p className="animate-settle mb-2 font-mono text-[11px] text-owed-you">
-                {ack}
+            <div className="grid flex-1 grid-cols-1 sm:grid-cols-2">
+              <div className="sm:border-r sm:border-line">
+                {owedToYou.length === 0 ? (
+                  <p className="px-5 py-4 font-mono text-xs text-ink-soft">
+                    {phase === "running" ? "reading your inbox…" : "all clear"}
+                  </p>
+                ) : (
+                  owedToYou.map((r) => (
+                    <DemoRow
+                      key={r.id}
+                      row={r}
+                      onSource={setModalEmail}
+                      onDone={markDone}
+                    />
+                  ))
+                )}
+              </div>
+              <div>
+                {owedByYou.length === 0 ? (
+                  <p className="px-5 py-4 font-mono text-xs text-ink-soft">
+                    {phase === "running" ? "reading your inbox…" : "all clear"}
+                  </p>
+                ) : (
+                  owedByYou.map((r) => (
+                    <DemoRow
+                      key={r.id}
+                      row={r}
+                      onSource={setModalEmail}
+                      onDone={markDone}
+                    />
+                  ))
+                )}
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="flex-1">
+            {doneRows.length === 0 ? (
+              <p className="px-5 py-4 font-mono text-xs text-ink-soft">
+                nothing closed yet — the scan is still running
               </p>
+            ) : (
+              doneRows.map((r) => (
+                <DemoRow
+                  key={r.id}
+                  row={r}
+                  onSource={setModalEmail}
+                  onDone={markDone}
+                />
+              ))
             )}
-            <form onSubmit={handleChat} className="flex items-center gap-2">
-              <input
-                value={chatText}
-                onChange={(e) => setChatText(e.target.value)}
-                placeholder="Add or fix something the scan missed — try “remind me Sarah owes me the deck by Friday”"
-                className="min-w-0 flex-1 rounded-md border border-line bg-paper px-3 py-2 text-xs text-ink placeholder:text-ink-soft/70 focus:border-owed-you focus:outline-none"
-              />
-              <button
-                type="submit"
-                className="flex-none rounded-md bg-ink px-3 py-2 font-mono text-[11px] text-paper transition-opacity hover:opacity-90"
-              >
-                add
-              </button>
-              <CalendarConnect
-                connected={calendarConnected}
-                onConnect={() => setCalendarConnected(true)}
-              />
-            </form>
           </div>
+        )}
+
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line bg-paper px-4 py-2.5 font-mono text-[11px] text-ink-soft">
+          <span>
+            {openRows.length} open loop{openRows.length === 1 ? "" : "s"} ·{" "}
+            {hotCount} need{hotCount === 1 ? "s" : ""} attention
+          </span>
+          <span className="flex items-center gap-3">
+            {showReliability && (
+              <span className="text-owed-you">reliability 92% · 3-wk streak</span>
+            )}
+            <span>
+              {phase === "running" ? "scanning…" : "synced from Gmail · just now"}
+            </span>
+          </span>
+        </div>
+
+        {/* chat-add */}
+        <div className="border-t border-line px-4 py-3">
+          {ack && (
+            <p className="animate-settle mb-2 font-mono text-[11px] text-owed-you">
+              {ack}
+            </p>
+          )}
+          <form onSubmit={handleChat} className="flex items-center gap-2">
+            <input
+              value={chatText}
+              onChange={(e) => setChatText(e.target.value)}
+              placeholder="Add or fix something the scan missed — try “remind me Sarah owes me the deck by Friday”"
+              className="min-w-0 flex-1 rounded-md border border-line bg-paper px-3 py-2 text-xs text-ink placeholder:text-ink-soft/70 focus:border-owed-you focus:outline-none"
+            />
+            <button
+              type="submit"
+              className="flex-none rounded-md bg-ink px-3 py-2 font-mono text-[11px] text-paper transition-opacity hover:opacity-90"
+            >
+              add
+            </button>
+            <CalendarConnect
+              connected={calendarConnected}
+              onConnect={() => setCalendarConnected(true)}
+            />
+          </form>
         </div>
       </div>
 

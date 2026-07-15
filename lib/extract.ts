@@ -16,7 +16,7 @@ export interface ExtractedCommitment {
 const EXTRACT_TOOL: Anthropic.Tool = {
   name: "record_commitments",
   description:
-    "Record the commitments (promises) found in this email, if any.",
+    "Record the open loops (commitments, asks, follow-ups) found in this email, if any.",
   input_schema: {
     type: "object",
     properties: {
@@ -39,7 +39,7 @@ const EXTRACT_TOOL: Anthropic.Tool = {
             description: {
               type: "string",
               description:
-                "A short, specific description of the promise, e.g. \"send the revised mockups\".",
+                "A short, specific description of the open loop, e.g. \"send the revised mockups\" or \"call her back this weekend\".",
             },
             dueDate: {
               type: ["string", "null"],
@@ -49,7 +49,7 @@ const EXTRACT_TOOL: Anthropic.Tool = {
             confidence: {
               type: "number",
               description:
-                "0 to 1 confidence that this is a genuine, specific commitment rather than small talk or a vague aspiration.",
+                "0 to 1 confidence that this is a real open loop someone still expects resolved. Soft or implied loops are fine at moderate confidence.",
             },
           },
           required: [
@@ -66,17 +66,22 @@ const EXTRACT_TOOL: Anthropic.Tool = {
   },
 };
 
-const SYSTEM_PROMPT = `You extract concrete commitments (promises) from a single email, for the inbox owner.
+const SYSTEM_PROMPT = `You extract open loops from a single email, for the inbox owner. An open loop is anything one person still expects from another — be generous about what counts:
 
-Only extract genuine, specific commitments: "I'll send the doc by Friday", "Can you confirm X by tomorrow?", "We'll get you the pricing this week". A question that requests a commitment counts as OWED_TO_YOU once implicitly agreed to, but if it's just a bare question with no promise, skip it.
+- Hard promises: "I'll send the doc by Friday", "we'll get you pricing this week"
+- Soft promises: "I'll look into it", "let me get back to you", "let me check"
+- Requests and asks: "can you confirm by the 18th?", "give me a call this weekend", "send it over when you get a chance"
+- Practical loops: appointments to confirm or RSVP, money owed, things to return or pay, a reply someone is clearly waiting on
 
-Skip vague social filler like "let's grab coffee sometime", "talk soon", greetings, or newsletters/notifications with no personal promise.
+It is better to surface a borderline loop than to miss a real one — the user can dismiss anything that doesn't belong. Use lower confidence for softer or implied loops rather than dropping them.
+
+Only skip content with no personal action at all: marketing blasts, newsletters, automated receipts, and pure FYI notifications.
 
 direction:
-- OWED_TO_YOU: someone else is promising to do something for the inbox owner.
-- OWED_BY_YOU: the inbox owner is promising to do something for someone else.
+- OWED_TO_YOU: someone else is on the hook to do something for the inbox owner.
+- OWED_BY_YOU: the inbox owner is on the hook to do something for someone else.
 
-If the email contains no real commitments, call the tool with an empty commitments array.`;
+If the email contains no open loops at all, call the tool with an empty commitments array.`;
 
 export async function extractCommitments(
   email: GmailMessage
